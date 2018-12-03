@@ -48,6 +48,19 @@ import cv2
 
 ##################################################
 ##################################################
+# GLOBAL VARIABLES
+##################################################
+##################################################
+    # define the grid size
+grid_dimensions_x = 11
+grid_dimensions_y = 8
+number_of_table_modules = 11 # seems to be related to zoom level?
+colour_array_resolution_x = 2
+colour_array_resolution_y = 2
+
+
+##################################################
+##################################################
 # MAIN FUNCTIONS
 ##################################################
 ##################################################
@@ -96,15 +109,13 @@ def send_over_UDP(multiprocess_shared_dict):
             except Exception as e:
                 print(e)
 
-            # save to file the current grid and slider if
-            # change was not detacted for more than interval seconds
-            if from_last_sent > SAVE_TO_FILE_INTERVAL:
-                save_grid_to_file(old_grid, old_slider)
-
             # match the two
             old_grid = grid
             old_slider = slider
             last_sent = datetime.now()
+
+            if from_last_sent > SAVE_TO_FILE_INTERVAL:
+                save_grid_to_file(grid, slider)
 
             # debug print
             print('\n', "UDP:", udp_message)
@@ -145,10 +156,6 @@ def scanner_function(multiprocess_shared_dict):
     # holder of old cell colors array to check for new scan
     OLD_CELL_COLORS_ARRAY = []
 
-    # define the grid size
-    grid_dimensions_x = 6
-    grid_dimensions_y = 3
-
     # load json file
     array_of_tags_from_json = parse_json_file('tags')
     array_of_maps_form_json = parse_json_file('map')
@@ -173,9 +180,6 @@ def scanner_function(multiprocess_shared_dict):
     # get video resolution from webcam
     video_resolution_x = int(video_capture.get(3))
     video_resolution_y = int(video_capture.get(4))
-
-    # number of overall modules in the table x dimension
-    number_of_table_modules = 14
 
     # scale of one module in actual pixel size over the x axis
     one_module_scale = int(video_resolution_x/number_of_table_modules)
@@ -493,12 +497,18 @@ def find_type_in_tags_array(cellColorsArray, tagsArray, mapArray, rotationArray)
     """
     typesArray = []
     # create np colors array with table struct
-    npColsArr = np.reshape(cellColorsArray, (18, 9))
+    number_of_colour_arrays = grid_dimensions_x * grid_dimensions_y
+    points_in_colour_array = colour_array_resolution_x * colour_array_resolution_y
+    npColsArr = np.reshape(cellColorsArray, (number_of_colour_arrays, points_in_colour_array))
 
     # go through the results
     for thisResult in npColsArr:
         # look for this result in tags array from JSON
         # and return only where TRUE appears in results
+      #  print("hello", thisResult, tagsArray)
+        print("moin", np.where([(thisResult == tag)]))
+        exit()
+        
         whichTag = np.where([(thisResult == tag).all()
                              for tag in tagsArray])[0]
         # if this tag is not found return -1
@@ -531,29 +541,35 @@ def get_scanner_pixel_coordinates(video_res_x, scale, scanner_square_size):
     """
 
     # Point looks like [x, y]
-    virtual_points = [
+    #virtual_points = [
 
-        [0, 0],
-        [2, 0],
-        [5, 0],
-        [7, 0],
-        [10, 0],
-        [12, 0],
+     #   [0, 0],
+      #  [2, 0],
+       # [5, 0],
+        #[7, 0],
+    #    [10, 0],
+    #    [12, 0],
 
-        [0, 3],
-        [2, 3],
-        [5, 3],
-        [7, 3],
-        [10, 3],
-        [12, 3],
-
-        [0, 6],
-        [2, 6],
-        [5, 6],
-        [7, 6],
-        [10, 6],
-        [12, 6]
-    ]
+   #     [0, 3],
+    #    [2, 3],
+  #      [5, 3],
+  #     [7, 3],
+  #      [10, 3],
+  #      [12, 3],
+#
+    #    [0, 6],
+    #    [2, 6],
+    #    [5, 6],
+    #    [7, 6],
+    #    [10, 6],
+    #    [12, 6]
+   # ]
+  #  
+    virtual_points = []
+    for i in range(0, grid_dimensions_x):
+        for j in range(0, grid_dimensions_y):
+             virtual_points.append([i,j])
+             
 
     # call helper function to find location of each point
     scanner_locations_array = transform_virtual_points_to_pixels(
@@ -569,19 +585,26 @@ def transform_virtual_points_to_pixels(points, scale, scanner_square_size):
     for scanner.
 
     Returns list of[x, y] pixel coordinates for scanner.
+    
+    # scale of one module in actual pixel size over the x axis
+    scale = int(video_resolution_x/number_of_table_modules)
+
+    # define the size for each scanner
+    scanner_square_size = int(scale/2)
+    
     """
     pixel_coordinates_list = []
     for [x, y] in points:
         scaled_x = x*scale
         scaled_y = y*scale
-        for i in range(0, 3):
-            for j in range(0, 3):
+        for i in range(0, colour_array_resolution_x):
+            for j in range(0, colour_array_resolution_y):
                 pixel_coordinates_list.append(
                     [scaled_x + (i*scanner_square_size)
-                     + int(scale/4),
+                     + int(scale/(colour_array_resolution_x -1)),
 
                      scaled_y + (j*scanner_square_size)
-                     + int(scale/4)
+                     + int(scale/(colour_array_resolution_x -1))
                      ])
 
     return pixel_coordinates_list
